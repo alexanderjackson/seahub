@@ -37,6 +37,32 @@ class InvitationsTest(BaseTestCase):
 
     @patch.object(CanInviteGuest, 'has_permission')
     @patch.object(UserPermissions, 'can_invite_guest')
+    def test_can_not_add_same_email(self, mock_can_invite_guest, mock_has_permission):
+
+        mock_can_invite_guest.return_val = True
+        mock_has_permission.return_val = True
+
+        assert len(Invitation.objects.all()) == 0
+        resp = self.client.post(self.endpoint, {
+            'type': 'guest',
+            'accepter': 'some_random_user@1.com',
+        })
+        self.assertEqual(201, resp.status_code)
+
+        json_resp = json.loads(resp.content)
+        assert json_resp['inviter'] == self.username
+        assert json_resp['accepter'] == 'some_random_user@1.com'
+        assert json_resp['expire_time'] is not None
+
+        resp = self.client.post(self.endpoint, {
+            'type': 'guest',
+            'accepter': 'some_random_user@1.com',
+        })
+        self.assertEqual(400, resp.status_code)
+        assert len(Invitation.objects.all()) == 1
+
+    @patch.object(CanInviteGuest, 'has_permission')
+    @patch.object(UserPermissions, 'can_invite_guest')
     def test_can_send_mail(self, mock_can_invite_guest, mock_has_permission):
 
         mock_can_invite_guest.return_val = True

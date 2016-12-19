@@ -1,4 +1,5 @@
 # Copyright (c) 2012-2016 Seafile Ltd.
+
 from django.utils.translation import ugettext as _
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
@@ -12,9 +13,10 @@ from seahub.api2.throttling import UserRateThrottle
 from seahub.api2.utils import api_error
 from seahub.base.accounts import User
 from seahub.invitations.models import Invitation
-from seahub.utils import is_valid_email
+from seahub.invitations.utils import validate_accepter
 
 json_content_type = 'application/json; charset=utf-8'
+
 
 class InvitationsView(APIView):
     authentication_classes = (TokenAuthentication, SessionAuthentication)
@@ -32,7 +34,7 @@ class InvitationsView(APIView):
         return Response(invitations)
 
     def post(self, request, format=None):
-        # Send a invitation.
+        # Send invitation.
         itype = request.data.get('type', '').lower()
         if not itype or itype != 'guest':
             return api_error(status.HTTP_400_BAD_REQUEST, 'type invalid.')
@@ -41,9 +43,14 @@ class InvitationsView(APIView):
         if not accepter:
             return api_error(status.HTTP_400_BAD_REQUEST, 'accepter invalid.')
 
-        if not is_valid_email(accepter):
+        if not validate_accepter(accepter):
             return api_error(status.HTTP_400_BAD_REQUEST,
                              _('Email %s invalid.') % accepter)
+
+        if Invitation.objects.filter(inviter=request.user.username,
+                                     accepter=accepter).count() > 0:
+            return api_error(status.HTTP_400_BAD_REQUEST,
+                             _('%s is already invited.') % accepter)
 
         try:
             User.objects.get(accepter)
